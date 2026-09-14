@@ -31,7 +31,7 @@ my_scratch_pad = ScratchPad(
     [
         DropDown("terminal", "ghostty --class=scratch", **scratchpad_base()),
         DropDown("volume", "ghostty -e alsamixer", **scratchpad_base()),
-        DropDown("files", "thunar", **scratchpad_base()),
+        DropDown("files", "dolphin", **scratchpad_base()),
     ],
 )
 

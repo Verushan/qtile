@@ -5,8 +5,10 @@ from os import path
 
 import psutil
 
-from libqtile import widget
+from libqtile import bar, widget
+from libqtile.lazy import lazy
 from libqtile.widget.battery import BatteryState, _LinuxBattery
+from .path import qtile_path
 from .theme import colors
 
 
@@ -74,6 +76,29 @@ class Memory(Centred, widget.Memory):
     pass
 
 
+class Mpris2(Centred, widget.Mpris2):
+    pass
+
+
+class Notify(Centred, widget.Notify):
+    pass
+
+
+class Systray(widget.Systray):
+    """A tray that survives a config reload.
+
+    qtile's Systray finishes by dropping its own window from the window map,
+    but on a reload that window has already gone. The KeyError then escapes
+    ``Bar.finalize``, so every widget to the right of the tray is left
+    unfinalised and keeps polling into the bar that has just been replaced.
+    Put the entry back so the delete finds what it is looking for.
+    """
+
+    def finalize(self):
+        self.qtile.windows_map.setdefault(self.wid, self)
+        super().finalize()
+
+
 class TextBox(Centred, widget.TextBox):
     pass
 
@@ -128,9 +153,54 @@ def bar_edge_separator():
     return widget.Sep(**base("active"), linewidth=0, padding=15, height_percent=100)
 
 
+class CollapsingGap(widget.Sep):
+    """A gap that goes away along with the widget it spaces.
+
+    The tray is empty whenever nothing has planted an icon in it, and a plain
+    ``gap`` beside it would hold that space open anyway. ``Sep`` fixes its
+    length when it is built, so make it a calculated one instead and answer 0
+    for as long as the partner has nothing to draw.
+    """
+
+    def __init__(self, partner, **config):
+        super().__init__(**config)
+        self.partner = partner
+        self.length_type = bar.CALCULATED
+
+    def calculate_length(self):
+        # Widgets are configured in bar order, so a partner further right has
+        # no bar to measure itself against yet.
+        if not self.partner.configured or not self.partner.length:
+            return 0
+
+        return self.padding + self.linewidth
+
+
 def gap(size):
     """An exact horizontal space. Sep's width is padding + linewidth, not x2."""
     return widget.Sep(background=colors["dark"], linewidth=0, padding=size)
+
+
+def collapsing_gap(partner, size=14):
+    return CollapsingGap(partner, background=colors["dark"], linewidth=0, padding=size)
+
+
+def collapsing_divided(partner, left=9, right=10):
+    """A rule and its gaps, all of which come and go with the widget they
+    introduce - the music widget is empty whenever nothing is playing, and
+    the bar should close up behind it rather than keep a rule hanging."""
+    return [
+        collapsing_gap(partner, left),
+        CollapsingGap(
+            partner,
+            foreground=rule,
+            background=colors["dark"],
+            linewidth=1,
+            padding=0,
+            size_percent=55,
+        ),
+        collapsing_gap(partner, right),
+    ]
 
 
 def spaced(*widgets, size=14):
@@ -178,18 +248,27 @@ class Logo(TextBox):
 
 
 def logo():
-    """The distro mark for the bar's left corner. U+F322 is the font-logos
-    ``linux-endeavour`` glyph - the neighbouring codepoints are other distros,
-    so check the name rather than the shape before swapping it."""
-    return Logo(**base(fg="color5"), text="\U0000f322")
+    """The distro mark for the bar's left corner, and the way into the session
+    menu. U+F322 is the font-logos ``linux-endeavour`` glyph - the
+    neighbouring codepoints are other distros, so check the name rather than
+    the shape before swapping it."""
+    return Logo(
+        **base(fg="color5"),
+        text="\U0000f322",
+        mouse_callbacks={"Button1": applet("power-menu.sh")},
+    )
+
+
+def applet(name):
+    """Open one of the bar's rofi menus. The widget beside it polls every few
+    seconds, so the bar catches up on its own once the menu has acted."""
+    return lazy.spawn(path.join(qtile_path, "scripts", name))
 
 
 def poll(command):
     """Run a command and return its stdout, or "" if it is unavailable/fails."""
     try:
-        result = subprocess.run(
-            command, capture_output=True, text=True, timeout=3
-        )
+        result = subprocess.run(command, capture_output=True, text=True, timeout=3)
     except (OSError, subprocess.SubprocessError):
         return ""
 
@@ -249,10 +328,7 @@ def bluetooth_text():
     if len(names) > 1:
         label += f" +{len(names) - 1}"
 
-    return (
-        f'<span foreground="{connected}">󰂱</span> '
-        + html.escape(label, quote=False)
-    )
+    return f'<span foreground="{connected}">󰂱</span> ' + html.escape(label, quote=False)
 
 
 def network_text():
@@ -269,8 +345,8 @@ def network_text():
         _, kind, state, connection = fields[:4]
         if kind in ("wifi", "ethernet") and state.startswith("connected"):
             symbol = "󰖩" if kind == "wifi" else "󰈀"
-            return (
-                f'<span foreground="{connected}">{symbol}</span> ' + html.escape(truncate(connection), quote=False)
+            return f'<span foreground="{connected}">{symbol} </span> ' + html.escape(
+                truncate(connection), quote=False
             )
 
     return "󰖪 Offline"
@@ -397,6 +473,7 @@ def bluetooth():
         **base(fg="color1"),
         func=bluetooth_text,
         update_interval=5,
+        mouse_callbacks={"Button1": applet("bluetooth-menu.sh")},
     )
 
 
@@ -405,38 +482,93 @@ def network():
         **base(fg="color1"),
         func=network_text,
         update_interval=5,
+        mouse_callbacks={"Button1": applet("wifi-menu.sh")},
     )
 
 
-def workspaces():
-    return [
-        widget.Spacer(**base()),
-        widget.GroupBox(
-            **base(fg="color1"),
-            font="Jetbrains Mono Nerd Font",
-            fontsize=20,
-            margin_y=0,
-            margin_x=0,
-            padding_y=0,
-            padding_x=0,
-            borderwidth=0,
-            active=colors["active"],
-            inactive=colors["inactive"],
-            rounded=False,
-            highlight_method="block",
-            highlight_color=colors["light"],
-            urgent_alert_method="block",
-            urgent_border=colors["urgent"],
-            this_current_screen_border=colors["focus"],
-            this_screen_border=colors["grey"],
-            other_current_screen_border=colors["dark"],
-            other_screen_border=colors["dark"],
-            disable_drag=True,
-            hide_unused=True,
-        ),
-        widget.Spacer(**base()),
-    ]
+def music():
+    """What the current MPRIS player is playing. Empty - and so invisible -
+    while nothing is, since ``stopped_text`` and ``no_metadata_text`` are
+    what qtile falls back on then."""
+    return Mpris2(
+        **base(fg="color4"),
+        name="music",
+        format="{xesam:title} · {xesam:artist}",
+        playing_text="󰝚 {track}",
+        paused_text="󰏤 {track}",
+        stopped_text="",
+        no_metadata_text="",
+        scroll=False,
+        max_chars=34,
+        mouse_callbacks={
+            "Button1": lazy.widget["music"].play_pause(),
+            "Button4": lazy.widget["music"].previous(),
+            "Button5": lazy.widget["music"].next(),
+        },
+    )
 
+
+def notifications():
+    """qtile's own notification server.
+
+    Nothing else on this machine owns ``org.freedesktop.Notifications``, so
+    without this every ``notify-send`` - the bar's menus report their failures
+    with one - times out unheard. Click to dismiss, right-click to follow the
+    notification's own action, scroll through a backlog.
+    """
+    return Notify(
+        **base(fg="color7"),
+        default_timeout=8,
+        default_timeout_urgent=15,
+        foreground_low=shade("color7", 0.6),
+        foreground_urgent=colors["urgent"][0],
+        background_low=colors["dark"][0],
+        background_urgent=colors["dark"][0],
+        max_chars=40,
+    )
+
+
+def trayed():
+    """The X11 system tray, followed by a gap that comes and goes with it.
+
+    Only one tray may exist across every bar, and it hosts real client windows
+    rather than text, so it sits outside the Centred family and takes its size
+    in pixels rather than from the font.
+    """
+    icons = Systray(background=colors["dark"], icon_size=20, padding=8)
+    return [icons, collapsing_gap(icons)]
+
+
+def workspaces():
+    return widget.GroupBox(
+        **base(fg="color1"),
+        font="Jetbrains Mono Nerd Font",
+        fontsize=20,
+        margin_y=0,
+        margin_x=0,
+        padding_y=0,
+        padding_x=0,
+        borderwidth=0,
+        active=colors["active"],
+        inactive=colors["inactive"],
+        rounded=False,
+        highlight_method="block",
+        highlight_color=colors["light"],
+        urgent_alert_method="block",
+        urgent_border=colors["urgent"],
+        this_current_screen_border=colors["focus"],
+        this_screen_border=colors["grey"],
+        other_current_screen_border=colors["dark"],
+        other_screen_border=colors["dark"],
+        disable_drag=True,
+        hide_unused=True,
+    )
+
+
+# A rule that comes and goes has to be told what it is spacing, so the
+# widgets it introduces exist before the list that places them.
+music_playing = music()
+notified = notifications()
 
 primary_widgets = [
     bar_edge_separator(),
@@ -448,7 +580,19 @@ primary_widgets = [
     network(),
     *divided(),
     bluetooth(),
-    *workspaces(),
+    *collapsing_divided(music_playing),
+    music_playing,
+    *collapsing_divided(notified),
+    notified,
+    # All the slack in the bar lives here, so the left-hand readouts keep
+    # their place while the music has room to grow into.
+    widget.Spacer(**base()),
+    workspaces(),
+    widget.Spacer(**base()),
+    gap(14),
+    # The tray is empty until an application plants an icon in it, so it
+    # takes up no room on the bar until one does.
+    *trayed(),
     *spaced(
         cpu(),
         gpu(),
