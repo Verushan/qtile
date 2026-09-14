@@ -725,7 +725,7 @@ primary_widgets = [
         cpu(),
         gpu(),
         fans(),
-        Memory(**base(fg="color3"), format="  {MemPercent}%"),
+        Memory(**base(fg="color6"), format="  {MemPercent}%"),
         Volume(**base(fg="color4"), volume_app="pavucontrol"),
         Battery(
             **base(fg="color6"),
