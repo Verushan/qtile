@@ -1,11 +1,13 @@
 import html
 import subprocess
+import time
 from glob import glob
+from math import tau
 from os import path
 
 import psutil
 
-from libqtile import bar, widget
+from libqtile import bar, pangocffi, widget
 from libqtile.lazy import lazy
 from libqtile.widget.battery import BatteryState, _LinuxBattery
 from .path import qtile_path
@@ -452,6 +454,128 @@ def gpu_text():
     return f"󰢮 {usage}% {temperature(degrees, gpu_alert)}"
 
 
+# The icon turns at a rate proportional to how hard the fans are working. Both
+# fans plateau at ~5400 RPM when hp-wmi is told to run them flat out
+# (``pwm1_enable`` = 0), so that is full speed. The icon has three-fold
+# symmetry, so at 20 frames a second it can only be shown turning below
+# ~3.3 turns a second before it starts to look like it is running backwards;
+# 2.5 keeps clear of that while leaving the idle ~2200 RPM at a visible 1/s.
+fan_max_rpm = 5400
+fan_max_turns_per_second = 2.5
+fan_frame_rate = 20
+
+
+def fan_speeds():
+    """Every chassis fan's RPM, in the order the hwmon driver lists them."""
+    return [
+        int(fan.current) for chip in psutil.sensors_fans().values() for fan in chip
+    ]
+
+
+def fan_text(speeds):
+    """The readings side by side under one unit, or nothing where there is no
+    fan to read so the widget closes up rather than leaving a lone icon."""
+    if not speeds:
+        return ""
+
+    return " · ".join(str(rpm) for rpm in speeds) + " RPM"
+
+
+class Fan(GenPollText):
+    """Fan speed behind an icon that actually turns.
+
+    The bar's other icons are glyphs in the same text run as their reading,
+    but pango cannot rotate a glyph. This one is drawn through cairo's own
+    text API instead, spun about the centre of its ink box - the hub of the
+    fan - by an angle that advances between frames in proportion to how close
+    the fastest fan is to its top speed. The reading is still an ordinary
+    layout, placed where it would fall after an icon and a space so it lines
+    up with the CPU and GPU readouts beside it.
+    """
+
+    glyph = "\U000F0210"  # Material Design ``fan``
+
+    def __init__(self, **config):
+        super().__init__(func=self.read, **config)
+        self.rpm = 0
+        self.angle = 0.0
+        self.last_frame = time.monotonic()
+
+    def read(self):
+        speeds = fan_speeds()
+        self.rpm = max(speeds, default=0)
+        return fan_text(speeds)
+
+    def _configure(self, qtile, bar):
+        super()._configure(qtile, bar)
+
+        # ``font`` is a pango description, so let pango pull the family out of
+        # it; the icon looks the same at every weight.
+        self.family = pangocffi.FontDescription.from_string(self.font).get_family()
+        self.select_glyph_font()
+        x_bearing, y_bearing, width, height, *_ = self.drawer.ctx.text_extents(
+            self.glyph
+        )
+        self.hub = (x_bearing + width / 2, y_bearing + height / 2)
+
+        lead = self.drawer.textlayout(
+            self.glyph + " ", self.foreground, self.font, self.fontsize, None
+        )
+        self.text_offset = lead.width
+        lead.finalize()
+
+    def select_glyph_font(self):
+        self.drawer.ctx.select_font_face(self.family)
+        self.drawer.ctx.set_font_size(self.fontsize)
+
+    def timer_setup(self):
+        super().timer_setup()
+        self.turn()
+
+    def turn(self):
+        """Advance the icon by however far the fan has turned since the last
+        frame, then draw. A stopped fan skips the draw, so an idle machine is
+        not repainting the bar twenty times a second for nothing."""
+        now = time.monotonic()
+        elapsed, self.last_frame = now - self.last_frame, now
+
+        if self.rpm and self.text:
+            speed = min(self.rpm / fan_max_rpm, 1)
+            turned = tau * elapsed * fan_max_turns_per_second * speed
+            self.angle = (self.angle + turned) % tau
+            self.draw()
+
+        self.timeout_add(1 / fan_frame_rate, self.turn)
+
+    def calculate_length(self):
+        if not self.text:
+            return 0
+
+        return self.text_offset + self.layout.width + self.padding * 2
+
+    def draw(self):
+        if not self.can_draw():
+            return
+
+        self.drawer.clear(self.background or self.bar.background)
+
+        if self.text:
+            ctx = self.drawer.ctx
+            ctx.save()
+            self.select_glyph_font()
+            self.drawer.set_source_rgb(self.foreground)
+            ctx.translate(self.padding + self.hub[0], self.bar.size / 2)
+            ctx.rotate(self.angle)
+            ctx.move_to(-self.hub[0], -self.hub[1])
+            ctx.show_text(self.glyph)
+            ctx.restore()
+
+            y = (self.bar.size - self.layout.height) / 2 + 1
+            self.layout.draw(self.padding + self.text_offset, y)
+
+        self.draw_at_default_position()
+
+
 def cpu():
     return GenPollText(
         **base(fg="color2"),
@@ -466,6 +590,10 @@ def gpu():
         func=gpu_text,
         update_interval=5,
     )
+
+
+def fans():
+    return Fan(**base(fg="color1"), update_interval=5)
 
 
 def bluetooth():
@@ -596,6 +724,7 @@ primary_widgets = [
     *spaced(
         cpu(),
         gpu(),
+        fans(),
         Memory(**base(fg="color3"), format="  {MemPercent}%"),
         Volume(**base(fg="color4"), volume_app="pavucontrol"),
         Battery(
