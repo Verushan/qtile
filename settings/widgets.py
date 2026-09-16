@@ -627,7 +627,7 @@ def music():
         stopped_text="",
         no_metadata_text="",
         scroll=False,
-        max_chars=34,
+        max_chars=25,
         mouse_callbacks={
             "Button1": lazy.widget["music"].play_pause(),
             "Button4": lazy.widget["music"].previous(),
