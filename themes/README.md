@@ -3,6 +3,7 @@ json object and changing values:
 
 ```json
 {
+    "terminal": "Nord",
     "dark": [
         "#0f101a",
         "#0f101a"
@@ -54,3 +55,18 @@ json object and changing values:
 }
 
 ```
+
+`terminal` is optional: it names the [ghostty](https://ghostty.org) theme to
+use alongside this one (`ghostty +list-themes`). Leave it out and the terminal
+colours are picked from the theme's own by hue. Either way the terminal takes
+the bar's `dark` as its background; `scripts/apply-theme.py` does this on
+every qtile start and reload.
+
+rofi takes `~/.config/rofi/<name>.rasi` as its palette when there is one, and
+otherwise one made from the theme's colours. The login screen
+(`~/.config/sddm`) takes the colours as they are, plus
+`background-<name>.jpg` from its theme folder if there is one.
+
+`catppuccin-mocha` is Catppuccin's palette with the accents pulled 18% of the
+way towards base, and green and peach traded for teal and flamingo, so the bar
+stays as quiet as it is in Kanagawa. The terminal keeps the real palette.

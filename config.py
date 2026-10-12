@@ -21,6 +21,7 @@ def autostart():
 @hook.subscribe.startup
 def runner():
     subprocess.Popen(["xsetroot", "-cursor_name", "left_ptr"])
+    subprocess.Popen([path.join(qtile_path, "scripts", "apply-theme.py")])
 
 
 # Chromium-based browsers tag new windows with the workspace they were last on

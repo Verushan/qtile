@@ -81,9 +81,11 @@ running, `Mod+Ctrl+R` reloads the config in place.
 }
 ```
 
-- **theme** – the name of a file in `themes/`. `kanagawa-dragon` and `nord`
-  are included; `themes/README.md` explains the handful of colours a theme
-  needs if you want to add your own.
+- **theme** – the name of a file in `themes/`. `kanagawa-dragon`,
+  `catppuccin-mocha` and `nord` are included; `themes/README.md` explains the
+  handful of colours a theme needs if you want to add your own. The terminal
+  (ghostty, and fish through it) and rofi follow the theme on the next reload;
+  the login screen follows once you run `sudo ~/.config/sddm/install.sh`.
 - **border-width** – window border, in pixels.
 - **gap** – space between windows and around the screen, in pixels.
 
@@ -184,6 +186,7 @@ scripts/
   bluetooth-menu.sh  Bluetooth menu (rofi + bluetoothctl)
   wallpaper.sh       picks and dims a wallpaper
   menu.sh            shared rofi helpers
+  apply-theme.py     carries the theme over to ghostty and rofi
 autostart.sh         wallpaper rotation, picom, screen-blanking off
 themes/              colour schemes
 ```

@@ -1,0 +1,63 @@
+{
+    "terminal": "Catppuccin Mocha",
+    "dark": [
+        "#1e1e2e",
+        "#1e1e2e"
+    ],
+    "grey": [
+        "#45475a",
+        "#45475a"
+    ],
+    "light": [
+        "#cdd6f4",
+        "#cdd6f4"
+    ],
+    "text": [
+        "#cdd6f4",
+        "#cdd6f4"
+    ],
+    "focus": [
+        "#313244",
+        "#313244"
+    ],
+    "urgent": [
+        "#cd7792",
+        "#cd7792"
+    ],
+    "active": [
+        "#99a1d9",
+        "#99a1d9"
+    ],
+    "inactive": [
+        "#313244",
+        "#313244"
+    ],
+    "color1": [
+        "#7699d5",
+        "#7699d5"
+    ],
+    "color2": [
+        "#7fbfb7",
+        "#7fbfb7"
+    ],
+    "color3": [
+        "#c68995",
+        "#c68995"
+    ],
+    "color4": [
+        "#ccaeb0",
+        "#ccaeb0"
+    ],
+    "color5": [
+        "#ac8ed3",
+        "#ac8ed3"
+    ],
+    "color6": [
+        "#99a1d9",
+        "#99a1d9"
+    ],
+    "color7": [
+        "#aeb5d0",
+        "#aeb5d0"
+    ]
+}
