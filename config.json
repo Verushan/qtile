@@ -1,5 +1,5 @@
 {
-	"theme": "kanagawa-dragon",
-	"border-width": 2,
-	"gap": 10
+  "theme": "catppuccin-mocha",
+  "border-width": 2,
+  "gap": 10
 }

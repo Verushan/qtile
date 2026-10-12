@@ -1,6 +1,6 @@
 #!/bin/sh
 wallpaper_interval_in_min=5
-wallpapers="$HOME/Pictures/Victus"
+wallpapers="$HOME/Pictures/walls-catppuccin-mocha"
 
 # Set a wallpaper now and swap to another one every few minutes. The script
 # picks one and hangs it; qtile waits for this file before it finishes
