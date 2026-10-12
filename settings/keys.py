@@ -5,7 +5,7 @@ mod = "mod4"
 
 # Run commands for common programs
 terminal = "ghostty"
-browser = "firefox"
+browser = "brave"
 file_explorer = "dolphin"
 
 keys = [

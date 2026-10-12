@@ -1,7 +1,7 @@
 # Qtile Config File
 # http://www.qtile.org/
 
-from libqtile import hook
+from libqtile import hook, qtile
 from settings.keys import mod, keys
 from settings.groups import groups
 from settings.layouts import layouts, floating_layout
@@ -21,6 +21,29 @@ def autostart():
 @hook.subscribe.startup
 def runner():
     subprocess.Popen(["xsetroot", "-cursor_name", "left_ptr"])
+
+
+# Chromium-based browsers tag new windows with the workspace they were last on
+# (_NET_WM_DESKTOP), which qtile honours. Pull them into the current group instead.
+open_on_current_group = ("brave-browser",)
+startup_done = False
+
+
+@hook.subscribe.startup
+def mark_startup_done():
+    global startup_done
+    startup_done = True
+
+
+@hook.subscribe.client_new
+def open_on_current(window):
+    # Leave windows alone while qtile re-adopts them after a restart
+    if not startup_done:
+        return
+
+    wm_class = [name.lower() for name in window.get_wm_class() or []]
+    if any(name in open_on_current_group for name in wm_class):
+        window.togroup(qtile.current_group.name)
 
 
 main = None
