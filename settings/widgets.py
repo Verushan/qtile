@@ -244,9 +244,17 @@ def icon(fg="text", bg="dark", fontsize=16, text="?"):
 class Logo(TextBox):
     """The font-logos glyphs sit on the text baseline rather than centred on
     the em box the way the Material icons do, so this one needs a second pixel
-    to line up with the rule beside it."""
+    to line up with the rule beside it.
+
+    The monospaced Nerd Font gives every icon a single cell of advance and lets
+    the wider ones spill past it, so the bar clipped the right half of this
+    one. The Propo variant advances each icon by its real width."""
 
     nudge = -2
+
+    def __init__(self, **config):
+        config.setdefault("font", "JetBrainsMono Nerd Font Propo Bold")
+        super().__init__(**config)
 
 
 def logo():
