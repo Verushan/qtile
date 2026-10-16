@@ -11,7 +11,7 @@ from libqtile import bar
 from libqtile.bar import Gap
 from libqtile.log_utils import logger
 
-from .widgets import primary_widgets
+from .widgets import primary_widgets, secondary_widgets
 from .config import config
 
 GAP = config.read_config("gap") // 2
@@ -45,3 +45,15 @@ if command.returncode != 0:
     connected_monitors = 1
 else:
     connected_monitors = int(command.stdout.decode("UTF-8"))
+
+# Each extra monitor gets its own bar. Counted when the config loads, so a
+# monitor plugged in later needs a qtile restart to get one.
+for _ in range(1, connected_monitors):
+    screens.append(
+        Screen(
+            top=status_bar(secondary_widgets()),
+            left=Gap(size=GAP),
+            right=Gap(size=GAP),
+            bottom=Gap(size=GAP),
+        )
+    )

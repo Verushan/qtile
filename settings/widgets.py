@@ -748,6 +748,24 @@ primary_widgets = [
     bar_edge_separator(),
 ]
 
+
+def secondary_widgets():
+    """A slimmer bar for every other monitor. A widget can only live in one
+    bar, so each screen needs its own fresh set - and the tray, notification
+    server and system readouts stay on the laptop's bar, since there can only
+    be one tray and one notification server."""
+    return [
+        bar_edge_separator(),
+        logo(),
+        *divided(left=10, right=9),
+        Clock(**base(fg="color1"), format="%A %d %B %H:%M %p"),
+        widget.Spacer(**base()),
+        workspaces(),
+        widget.Spacer(**base()),
+        bar_edge_separator(),
+    ]
+
+
 widget_defaults = {
     "font": "JetBrainsMono Nerd Font Bold",
     "fontsize": 15,

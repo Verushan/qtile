@@ -1,4 +1,7 @@
 #!/bin/sh
+# Light up any external monitor first, so the wallpaper covers it too.
+"$HOME/.config/qtile/scripts/monitors.sh"
+
 wallpaper_interval_in_min=5
 wallpapers="$HOME/Pictures/walls-catppuccin-mocha"
 
