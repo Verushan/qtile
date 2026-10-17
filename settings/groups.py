@@ -1,28 +1,24 @@
-from libqtile.config import Key, Group, ScratchPad, DropDown
+from libqtile.config import Key, ScratchPad, DropDown
 from libqtile.lazy import lazy
 from .keys import mod, keys
+from . import desktops, navigation
 
 
 def scratchpad_base(opacity=0.9):
     return {"width": 0.8, "height": 0.8, "x": 0.1, "y": 0.1, "opacity": opacity}
 
 
-workspace_symbol = " ● "
+groups = desktops.groups()
 
-groups = [
-    Group(name=str(index), label=icon)
-    for index, icon in enumerate(workspace_symbol for _ in range(9))
-]
-
-for i, group in enumerate(groups):
-    keybind = str(i + 1)
+for desktop in range(1, desktops.DESKTOPS + 1):
+    keybind = str(desktop)
 
     keys.extend(
         [
-            # Switch to workspace N
-            Key([mod], keybind, lazy.group[group.name].toscreen()),
-            # Send window to workspace N
-            Key([mod, "shift"], keybind, lazy.window.togroup(group.name)),
+            # Switch every monitor to desktop N
+            Key([mod], keybind, navigation.go_to_desktop(desktop)),
+            # Send window to desktop N, on the monitor it is on
+            Key([mod, "shift"], keybind, navigation.send_to_desktop(desktop)),
         ]
     )
 

@@ -1,5 +1,8 @@
 {
   "theme": "catppuccin-mocha",
   "border-width": 2,
-  "gap": 10
+  "gap": 10,
+  "primary-monitor": "external",
+  "external-monitor-side": "left",
+  "external-scale": 1
 }

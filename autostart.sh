@@ -1,9 +1,12 @@
 #!/bin/sh
-# Light up any external monitor first, so the wallpaper covers it too.
-"$HOME/.config/qtile/scripts/monitors.sh"
-
 wallpaper_interval_in_min=5
 wallpapers="$HOME/Pictures/walls-catppuccin-mocha"
+
+# Lay out the monitors first, so the wallpaper covers them all, then keep
+# them laid out as they are plugged in and pulled out. The watcher ends with
+# the X session.
+"$HOME/.config/qtile/scripts/monitors.py"
+"$HOME/.config/qtile/scripts/monitors.py" --watch "$wallpapers" &
 
 # Set a wallpaper now and swap to another one every few minutes. The script
 # picks one and hangs it; qtile waits for this file before it finishes

@@ -2,6 +2,7 @@
 # http://www.qtile.org/
 
 from libqtile import hook, qtile
+from settings import desktops
 from settings.keys import mod, keys
 from settings.groups import groups
 from settings.layouts import layouts, floating_layout
@@ -22,6 +23,15 @@ def autostart():
 def runner():
     subprocess.Popen(["xsetroot", "-cursor_name", "left_ptr"])
     subprocess.Popen([path.join(qtile_path, "scripts", "apply-theme.py")])
+
+
+# Line the monitors up on one desktop whenever they might have drifted apart:
+# a reload brings back whatever group each monitor had, and a monitor coming
+# or going hands qtile a screen with no desktop group of its own.
+@hook.subscribe.startup
+@hook.subscribe.screens_reconfigured
+def settle_desktops():
+    desktops.settle(qtile)
 
 
 # Chromium-based browsers tag new windows with the workspace they were last on

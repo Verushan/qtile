@@ -77,7 +77,10 @@ running, `Mod+Ctrl+R` reloads the config in place.
 {
     "theme": "kanagawa-dragon",
     "border-width": 2,
-    "gap": 10
+    "gap": 10,
+    "primary-monitor": "external",
+    "external-monitor-side": "left",
+    "external-scale": 1
 }
 ```
 
@@ -88,6 +91,29 @@ running, `Mod+Ctrl+R` reloads the config in place.
   the login screen follows once you run `sudo ~/.config/sddm/install.sh`.
 - **border-width** – window border, in pixels.
 - **gap** – space between windows and around the screen, in pixels.
+- **primary-monitor** – `external` or `laptop`: which screen is primary while
+  a monitor is plugged in. The primary screen carries the full bar (tray,
+  notifications, system readouts) and is where windows gather when monitors
+  come and go; the others get a slim bar. Without a monitor the laptop is
+  always primary.
+- **external-monitor-side** – `left` or `right`: which side of the laptop
+  external monitors sit on, so the cursor and `Mod+H/L` cross over the edge
+  they physically meet.
+- **external-scale** – how big things look on an external monitor. `match`
+  makes them the same physical size as on the laptop, so a big monitor with
+  big pixels shows more rather than everything blown up; `1` leaves the
+  monitor at its native pixels; a number like `0.8` draws things at that
+  share of their native size. X11 can only do this by drawing the monitor's
+  desktop larger and having the GPU shrink it to fit, so text there is a
+  touch softer, and a fullscreen game renders the larger size too. It needs
+  the monitor to hang off the Intel GPU (the USB-C/DisplayPort outputs): the
+  HDMI port belongs to the NVIDIA card, which shows the larger desktop
+  unshrunk, running off the edge of the monitor - keep `1` there.
+
+Monitors take care of themselves: each one is switched on at its native
+resolution and fastest refresh rate as soon as it is plugged in, and switched
+off when it is pulled out. Run `scripts/monitors.py` to apply a change to
+these settings straight away.
 
 Default programs (`terminal`, `browser`, `file_explorer`) live at the top of
 `settings/keys.py`. The wallpaper folder and how often it changes are the first
@@ -116,8 +142,8 @@ on (an HP Victus 15):
 
 | Keys | Action |
 | --- | --- |
-| `Mod+H/J/K/L` | Focus left / down / up / right |
-| `Mod+Shift+H/J/K/L` | Move window left / down / up / right |
+| `Mod+H/J/K/L` | Focus left / down / up / right — `H`/`L` carry on to the next monitor at the edge |
+| `Mod+Shift+H/J/K/L` | Move window left / down / up / right — `H`/`L` push it onto the next monitor at the edge |
 | `Mod+Ctrl+H/J/K/L` | Grow window left / down / up / right |
 | `Mod+Shift+F` | Toggle floating |
 | `Mod+Shift+M` | Toggle fullscreen |
@@ -127,13 +153,22 @@ on (an HP Victus 15):
 | `Mod+Drag` (right button) | Resize floating window |
 | `Mod+Middle-click` | Bring window to front |
 
-### Workspaces and screens
+### Desktops and monitors
+
+Like Windows 11's virtual desktops, each desktop spans every monitor: switching
+desktop switches all of them, and each monitor comes back to whatever it had
+open there. Each bar numbers every desktop that has a window open, by the key
+that reaches it: bright where that desktop has windows on this monitor, dim
+where they are all on another, and the desktop on show sits in a block.
+Docking moves the open windows onto the primary monitor, and undocking brings
+everything back to the laptop.
 
 | Keys | Action |
 | --- | --- |
-| `Mod+1`…`9` | Go to workspace |
-| `Mod+Shift+1`…`9` | Send window to workspace |
-| `Mod+.` / `Mod+,` | Focus next / previous monitor |
+| `Mod+1`…`9` | Switch every monitor to desktop N |
+| `Mod+Shift+1`…`9` | Send window to desktop N, on the monitor it is on |
+| `Mod+,` / `Mod+.` | Focus the monitor to the left / right |
+| `Mod+Shift+,` / `Mod+Shift+.` | Send window to the monitor to the left / right |
 
 ### Scratchpads
 
@@ -176,18 +211,21 @@ config.py            entry point; pulls everything from settings/
 settings/
   widgets.py         the bar and every widget on it
   keys.py            keybindings and default programs
-  groups.py          workspaces and scratchpads
+  groups.py          desktop keys and scratchpads
+  desktops.py        desktops that span every monitor
+  navigation.py      moving focus and windows across monitors
   layouts.py         BSP and Max
-  screens.py         the bar's screen placement
+  screens.py         a bar for each monitor
   theme.py           loads themes/<name>.json
 scripts/
   power-menu.sh      session menu (rofi)
   wifi-menu.sh       Wi-Fi menu (rofi + nmcli)
   bluetooth-menu.sh  Bluetooth menu (rofi + bluetoothctl)
   wallpaper.sh       picks and dims a wallpaper
+  monitors.py        lays out monitors, and again whenever one is plugged in
   menu.sh            shared rofi helpers
   apply-theme.py     carries the theme over to ghostty and rofi
-autostart.sh         wallpaper rotation, picom, screen-blanking off
+autostart.sh         monitors, wallpaper rotation, picom, screen-blanking off
 themes/              colour schemes
 ```
 

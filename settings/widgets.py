@@ -10,6 +10,7 @@ import psutil
 from libqtile import bar, pangocffi, widget
 from libqtile.lazy import lazy
 from libqtile.widget.battery import BatteryState, _LinuxBattery
+from . import desktops
 from .path import qtile_path
 from .theme import colors
 
@@ -675,18 +676,53 @@ def trayed():
     return [icons, collapsing_gap(icons)]
 
 
-def workspaces():
-    return widget.GroupBox(
+class DesktopBox(widget.GroupBox):
+    """One monitor's view of the desktops, numbered by the key that reaches
+    them.
+
+    A desktop is listed while it holds a window on any monitor, so every
+    number worth pressing is in sight on every bar. It is drawn bright when
+    some of those windows are on this monitor and dim when they are all on
+    another, and the desktop on show sits in a block. Clicking a desktop
+    switches every monitor to it, as its key does.
+    """
+
+    def __init__(self, monitor, **config):
+        super().__init__(**config)
+        self.monitor = monitor
+
+    @property
+    def groups(self):
+        listed = []
+        for desktop in range(1, desktops.DESKTOPS + 1):
+            row = [
+                self.qtile.groups_map.get(desktops.group_name(desktop, monitor))
+                for monitor in range(desktops.MONITORS)
+            ]
+            if any(group.windows or group.screen for group in row if group):
+                listed.append(row[self.monitor])
+
+        return listed
+
+    def go_to_group(self, group):
+        owner = desktops.parse(group.name) if group else None
+        if owner:
+            desktops.switch(self.qtile, owner[0])
+
+
+def workspaces(monitor):
+    return DesktopBox(
+        monitor,
         **base(fg="color1"),
-        font="Jetbrains Mono Nerd Font",
-        fontsize=20,
+        font="JetBrainsMono Nerd Font Bold",
+        fontsize=15,
         margin_y=0,
         margin_x=0,
         padding_y=0,
-        padding_x=0,
+        padding_x=12,
         borderwidth=0,
         active=colors["active"],
-        inactive=colors["inactive"],
+        inactive=shade("light", 0.35),
         rounded=False,
         highlight_method="block",
         highlight_color=colors["light"],
@@ -697,7 +733,8 @@ def workspaces():
         other_current_screen_border=colors["dark"],
         other_screen_border=colors["dark"],
         disable_drag=True,
-        hide_unused=True,
+        # Scrolling would walk through every monitor's groups, not desktops.
+        use_mouse_wheel=False,
     )
 
 
@@ -723,7 +760,7 @@ primary_widgets = [
     # All the slack in the bar lives here, so the left-hand readouts keep
     # their place while the music has room to grow into.
     widget.Spacer(**base()),
-    workspaces(),
+    workspaces(0),
     widget.Spacer(**base()),
     gap(14),
     # The tray is empty until an application plants an icon in it, so it
@@ -749,7 +786,7 @@ primary_widgets = [
 ]
 
 
-def secondary_widgets():
+def secondary_widgets(monitor):
     """A slimmer bar for every other monitor. A widget can only live in one
     bar, so each screen needs its own fresh set - and the tray, notification
     server and system readouts stay on the laptop's bar, since there can only
@@ -760,7 +797,7 @@ def secondary_widgets():
         *divided(left=10, right=9),
         Clock(**base(fg="color1"), format="%A %d %B %H:%M %p"),
         widget.Spacer(**base()),
-        workspaces(),
+        workspaces(monitor),
         widget.Spacer(**base()),
         bar_edge_separator(),
     ]

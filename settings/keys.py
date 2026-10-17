@@ -1,6 +1,8 @@
 from libqtile.lazy import lazy
 from libqtile.config import Key
 
+from . import navigation
+
 mod = "mod4"
 
 # Run commands for common programs
@@ -12,11 +14,11 @@ keys = [
     Key(key[0], key[1], *key[2:])
     for key in [
         # ------------ Window Configs ------------
-        # Switch between windows in current stack pane
+        # Switch between windows, carrying on to the next monitor at the edge
         ([mod], "j", lazy.layout.down()),
         ([mod], "k", lazy.layout.up()),
-        ([mod], "h", lazy.layout.left()),
-        ([mod], "l", lazy.layout.right()),
+        ([mod], "h", navigation.focus("left")),
+        ([mod], "l", navigation.focus("right")),
         # BSP window grow
         ([mod, "control"], "j", lazy.layout.grow_down()),
         ([mod, "control"], "k", lazy.layout.grow_up()),
@@ -26,19 +28,21 @@ keys = [
         ([mod, "shift"], "f", lazy.window.toggle_floating()),
         # Toggle fullscreen
         ([mod, "shift"], "m", lazy.window.toggle_fullscreen()),
-        # Move windows up or down in current stack
+        # Move windows around, pushing them onto the next monitor at the edge
         ([mod, "shift"], "j", lazy.layout.shuffle_down()),
         ([mod, "shift"], "k", lazy.layout.shuffle_up()),
-        ([mod, "shift"], "h", lazy.layout.shuffle_left()),
-        ([mod, "shift"], "l", lazy.layout.shuffle_right()),
+        ([mod, "shift"], "h", navigation.shuffle("left")),
+        ([mod, "shift"], "l", navigation.shuffle("right")),
         # Toggle between different layouts as defined below
         ([mod], "Tab", lazy.next_layout()),
         ([mod, "shift"], "Tab", lazy.prev_layout()),
         # Kill window
         ([mod, "shift"], "q", lazy.window.kill()),
-        # Switch focus of monitors
-        ([mod], "period", lazy.next_screen()),
-        ([mod], "comma", lazy.prev_screen()),
+        # Focus the monitor to the left/right, or send the window there
+        ([mod], "comma", navigation.focus_screen("left")),
+        ([mod], "period", navigation.focus_screen("right")),
+        ([mod, "shift"], "comma", navigation.send_to_screen("left")),
+        ([mod, "shift"], "period", navigation.send_to_screen("right")),
         # Restart Qtile
         ([mod, "control"], "r", lazy.reload_config()),
         ([mod, "control"], "q", lazy.shutdown()),

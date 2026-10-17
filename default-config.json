@@ -1,5 +1,8 @@
 {
     "theme": "nord",
     "border-width": 2,
-    "gap": 5
+    "gap": 5,
+    "primary-monitor": "external",
+    "external-monitor-side": "right",
+    "external-scale": 1
 }
