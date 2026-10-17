@@ -9,6 +9,8 @@ import psutil
 
 from libqtile import bar, pangocffi, widget
 from libqtile.lazy import lazy
+from libqtile.popup import Popup
+from libqtile.widget.mpris2widget import MPRIS_PATH, MPRIS_PLAYER, PROPERTIES_INTERFACE
 from libqtile.widget.battery import BatteryState, _LinuxBattery
 from . import desktops
 from .path import qtile_path
@@ -80,7 +82,126 @@ class Memory(Centred, widget.Memory):
 
 
 class Mpris2(Centred, widget.Mpris2):
-    pass
+    """What is playing, as a lone play/pause glyph on the bar, with the track
+    itself in a panel that drops down beneath it while the pointer rests
+    there. A title on the bar grows and shrinks with every track and would
+    shove the workspaces off the centre."""
+
+    def __init__(self, **config):
+        super().__init__(**config)
+        self.details = None
+        self.showing = False
+
+    async def _config_async(self):
+        await super()._config_async()
+
+        # qtile only hears of a player when it next changes, so after a login
+        # or reload a paused track showed nothing. Ask the bus who is there,
+        # and take one that is playing over one that is not.
+        reply = await self._send_message(
+            "org.freedesktop.DBus", "org.freedesktop.DBus", "/org/freedesktop/DBus",
+            "ListNames", "", [],
+        )
+        if reply is None or not reply.body:
+            return
+
+        found = None
+        for name in reply.body[0]:
+            if not name.startswith("org.mpris.MediaPlayer2."):
+                continue
+
+            status = await self._send_message(
+                name, PROPERTIES_INTERFACE, MPRIS_PATH, "Get", "ss",
+                [MPRIS_PLAYER, "PlaybackStatus"],
+            )
+            playing = status is not None and status.body and status.body[0].value == "Playing"
+            if found is None or playing:
+                found = name
+            if playing:
+                break
+
+        if found is not None and self._current_player is None:
+            # Replies come from the player's unique bus name, which is what
+            # qtile then keys the player's own name under.
+            self._current_player = found
+            identity = await self.get_player_name(found)
+            await self._check_player()
+            self.player_names[self._current_player] = identity
+
+    def mouse_enter(self, x, y):
+        self.showing = True
+        self.show_details()
+
+    def mouse_leave(self, x, y):
+        self.showing = False
+        if self.details is not None:
+            self.details.hide()
+
+    def parse_message(self, *args, **kwargs):
+        super().parse_message(*args, **kwargs)
+        # Keep an open panel up to date, and drop it once playback stops and
+        # the glyph it hangs from goes away.
+        if self.showing:
+            if self.text:
+                self.show_details()
+            elif self.details is not None:
+                self.details.hide()
+
+    def describe(self):
+        meta = getattr(self, "metadata", None) or {}
+
+        def field(key):
+            return html.escape(meta.get(key, "").strip())
+
+        lines = [f"<b>{field('xesam:title') or 'Unknown track'}</b>"]
+        byline = " · ".join(part for part in (field("xesam:artist"), field("xesam:album")) if part)
+        if byline:
+            lines.append(byline)
+
+        state = "Playing" if self.is_playing else "Paused"
+        player = html.escape(self.player) if self.player not in ("None", "Unknown") else ""
+        dim = shade("text", 0.55)
+        lines.append(f'<span foreground="{dim}">{state}{" in " + player if player else ""}</span>')
+        return "\n".join(lines)
+
+    def show_details(self):
+        if not self.text:
+            return
+
+        if self.details is None:
+            self.details = Popup(
+                self.qtile,
+                font="JetBrainsMono Nerd Font",
+                fontsize=13,
+                foreground=colors["text"][0],
+                background=colors["dark"][0],
+                border=colors["grey"][0],
+                border_width=1,
+                horizontal_padding=14,
+                vertical_padding=10,
+                wrap=False,
+            )
+
+        panel = self.details
+        panel.layout.text = self.describe()
+        screen = self.bar.screen
+        panel.width = min(panel.layout.width + 2 * panel.horizontal_padding, screen.width // 2)
+        panel.height = panel.layout.height + 2 * panel.vertical_padding
+
+        # Hang it from the glyph, a gap below the bar, kept on the screen.
+        panel.x = min(self.bar.x + self.offsetx, screen.x + screen.width - panel.width - 8)
+        panel.y = self.bar.y + self.bar.height + 6
+        panel.place()
+        panel.unhide()
+        panel.clear()
+        panel.draw_text()
+        panel.draw()
+
+    def finalize(self):
+        if self.details is not None:
+            self.details.kill()
+            self.details = None
+        super().finalize()
 
 
 class Notify(Centred, widget.Notify):
@@ -624,19 +745,24 @@ def network():
 
 
 def music():
-    """What the current MPRIS player is playing. Empty - and so invisible -
-    while nothing is, since ``stopped_text`` and ``no_metadata_text`` are
+    """A glyph for whether the current MPRIS player is playing or paused,
+    with the track in a panel on hover. Empty - and so invisible - while
+    nothing is playing, since ``stopped_text`` and ``no_metadata_text`` are
     what qtile falls back on then."""
     return Mpris2(
         **base(fg="color4"),
         name="music",
+        # The monospaced Nerd Font gives the glyph one cell and lets it spill
+        # over its neighbour; the Propo variant gives it its real width.
+        font="JetBrainsMono Nerd Font Propo Bold",
         format="{xesam:title} · {xesam:artist}",
-        playing_text="󰝚 {track}",
-        paused_text="󰏤 {track}",
+        # One note either way, dimmed while paused: a pause glyph is two
+        # upright bars, and beside the bar's dividers it reads as another.
+        playing_text="󰝚",
+        paused_text=f'<span foreground="{shade("color4", 0.45)}">󰝚</span>',
         stopped_text="",
         no_metadata_text="",
         scroll=False,
-        max_chars=25,
         mouse_callbacks={
             "Button1": lazy.widget["music"].play_pause(),
             "Button4": lazy.widget["music"].previous(),

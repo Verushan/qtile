@@ -19,7 +19,7 @@ Everything on the bar is live, and the icons that make sense to click, do.
 | Clock | Day, date and time | |
 | Network | The connected Wi-Fi/ethernet name, or *Offline* | Wi-Fi menu: pick a network, rescan, toggle the radio |
 | Bluetooth | The connected device (+ how many more); icon shades by state | Bluetooth menu: connect, pair, disconnect, toggle power |
-| Music | What the current MPRIS player is playing (hidden when nothing is) | Play/pause; scroll for previous/next |
+| Music | A play/pause icon for the current MPRIS player (hidden when nothing is playing); hover for the track, artist and player | Play/pause; scroll for previous/next |
 | Notifications | qtile's own notification server, so `notify-send` works without a separate daemon | Dismiss; right-click follows the notification's action |
 | Workspaces | One dot per workspace that has windows | |
 | System tray | Application tray icons (takes no space while empty) | |
