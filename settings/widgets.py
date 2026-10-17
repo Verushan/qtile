@@ -7,7 +7,7 @@ from os import path
 
 import psutil
 
-from libqtile import bar, pangocffi, widget
+from libqtile import bar, hook, pangocffi, widget
 from libqtile.lazy import lazy
 from libqtile.popup import Popup
 from libqtile.widget.mpris2widget import MPRIS_PATH, MPRIS_PLAYER, PROPERTIES_INTERFACE
@@ -204,8 +204,120 @@ class Mpris2(Centred, widget.Mpris2):
         super().finalize()
 
 
-class Notify(Centred, widget.Notify):
-    pass
+class Toast(Popup):
+    """A notification's own little window, which hands its clicks back."""
+
+    def __init__(self, qtile, on_click, **config):
+        self.on_click = on_click
+        super().__init__(qtile, **config)
+
+    def process_button_click(self, x, y, button):
+        self.on_click(button)
+
+
+class Notify(widget.Notify):
+    """qtile's notification server, kept off the bar.
+
+    Text on the bar came and went with every notification and shoved the
+    workspaces off the centre. Instead each notification drops down as a
+    toast in the top right corner, below the bar, for as long as it lasts -
+    click it away, or right-click to follow its action - and any desktop
+    out of sight that holds a window of the app it came from lights up, so
+    you can see where to go.
+    """
+
+    toast_width = 380
+
+    def __init__(self, **config):
+        super().__init__(**config)
+        self.toast = None
+
+    def calculate_length(self):
+        return 0
+
+    def draw(self):
+        pass
+
+    def real_update(self, notif):
+        super().real_update(notif)
+        self.show_toast(notif)
+        self.flag_desktops(notif)
+        return True
+
+    def clear(self, *args, **kwargs):
+        super().clear(*args, **kwargs)
+        if self.toast is not None:
+            self.toast.hide()
+
+    def clicked(self, button):
+        if button == 3 and self.action:
+            self._invoke()
+        else:
+            self.clear()
+
+    def show_toast(self, notif):
+        if self.toast is None:
+            self.toast = Toast(
+                self.qtile,
+                self.clicked,
+                font="JetBrainsMono Nerd Font",
+                fontsize=13,
+                foreground=colors["text"][0],
+                background=colors["dark"][0],
+                border=colors["grey"][0],
+                border_width=1,
+                horizontal_padding=14,
+                vertical_padding=10,
+                wrap=True,
+            )
+
+        toast = self.toast
+        lines = [f"<b>{pangocffi.markup_escape_text(notif.summary)}</b>"]
+        if notif.body:
+            lines.append(pangocffi.markup_escape_text(notif.body))
+        if notif.app_name:
+            dim = shade("text", 0.55)
+            lines.append(f'<span foreground="{dim}">{pangocffi.markup_escape_text(notif.app_name)}</span>')
+
+        urgency = getattr(notif.hints.get("urgency"), "value", 1)
+        toast.set_border(colors["urgent"][0] if urgency == 2 else colors["grey"][0])
+
+        toast.layout.width = self.toast_width - 2 * toast.horizontal_padding
+        toast.layout.text = "\n".join(lines)
+        toast.width = self.toast_width
+        toast.height = toast.layout.height + 2 * toast.vertical_padding
+        toast.x = self.bar.x + self.bar.width - toast.width
+        toast.y = self.bar.y + self.bar.height + 6
+        toast.place()
+        toast.unhide()
+        toast.clear()
+        toast.draw_text()
+        toast.draw()
+
+    def flag_desktops(self, notif):
+        """Mark the windows of the app a notification came from, on desktops
+        not on show, as wanting attention. Notifications name their app but
+        not its window, so it goes by the window's class - "Brave" finds
+        brave-browser."""
+        app = notif.app_name.lower().replace(" ", "")
+        if not app or app == "notify-send":
+            return
+
+        for window in list(self.qtile.windows_map.values()):
+            group = getattr(window, "group", None)
+            if group is None or group.screen is not None or desktops.parse(group.name) is None:
+                continue
+
+            classes = [c.lower().replace(" ", "") for c in window.get_wm_class() or []]
+            if any(app in c or c in app for c in classes if c):
+                desktops.attention.add(window.wid)
+                hook.fire("client_urgent_hint_changed", window)
+
+    def finalize(self):
+        if self.toast is not None:
+            self.toast.kill()
+            self.toast = None
+        super().finalize()
 
 
 class Systray(widget.Systray):
@@ -776,18 +888,12 @@ def notifications():
 
     Nothing else on this machine owns ``org.freedesktop.Notifications``, so
     without this every ``notify-send`` - the bar's menus report their failures
-    with one - times out unheard. Click to dismiss, right-click to follow the
-    notification's own action, scroll through a backlog.
+    with one - times out unheard. It takes no room on the bar; see Notify.
     """
     return Notify(
         **base(fg="color7"),
         default_timeout=8,
         default_timeout_urgent=15,
-        foreground_low=shade("color7", 0.6),
-        foreground_urgent=colors["urgent"][0],
-        background_low=colors["dark"][0],
-        background_urgent=colors["dark"][0],
-        max_chars=40,
     )
 
 
@@ -809,7 +915,9 @@ class DesktopBox(widget.GroupBox):
     A desktop is listed while it holds a window on any monitor, so every
     number worth pressing is in sight on every bar. It is drawn bright when
     some of those windows are on this monitor and dim when they are all on
-    another, and the desktop on show sits in a block. Clicking a desktop
+    another, and the desktop on show sits in a block. A desktop with a window
+    asking for attention - or one whose app just sent a notification - is
+    numbered in the urgent colour until you go to it. Clicking a desktop
     switches every monitor to it, as its key does.
     """
 
@@ -829,6 +937,20 @@ class DesktopBox(widget.GroupBox):
                 listed.append(row[self.monitor])
 
         return listed
+
+    def group_has_urgent(self, group):
+        """A desktop wants attention if anything on it does, on any monitor,
+        so its number lights up on every bar rather than only on the bar of
+        the monitor the window is on."""
+        owner = desktops.parse(group.name)
+        if owner is None:
+            return super().group_has_urgent(group)
+
+        row = (
+            self.qtile.groups_map.get(desktops.group_name(owner[0], monitor))
+            for monitor in range(desktops.MONITORS)
+        )
+        return any(desktops.wants_attention(w) for g in row if g for w in g.windows)
 
     def go_to_group(self, group):
         owner = desktops.parse(group.name) if group else None
@@ -852,7 +974,10 @@ def workspaces(monitor):
         rounded=False,
         highlight_method="block",
         highlight_color=colors["light"],
-        urgent_alert_method="block",
+        # A desktop wanting attention has its number lit up in the urgent
+        # colour; a block of it drowned the number out.
+        urgent_alert_method="text",
+        urgent_text=colors["urgent"],
         urgent_border=colors["urgent"],
         this_current_screen_border=colors["focus"],
         this_screen_border=colors["grey"],
@@ -881,10 +1006,8 @@ primary_widgets = [
     bluetooth(),
     *collapsing_divided(music_playing),
     music_playing,
-    *collapsing_divided(notified),
+    # Takes no room: notifications show below the bar instead.
     notified,
-    # All the slack in the bar lives here, so the left-hand readouts keep
-    # their place while the music has room to grow into.
     widget.Spacer(**base()),
     workspaces(0),
     widget.Spacer(**base()),

@@ -20,7 +20,7 @@ Everything on the bar is live, and the icons that make sense to click, do.
 | Network | The connected Wi-Fi/ethernet name, or *Offline* | Wi-Fi menu: pick a network, rescan, toggle the radio |
 | Bluetooth | The connected device (+ how many more); icon shades by state | Bluetooth menu: connect, pair, disconnect, toggle power |
 | Music | A play/pause icon for the current MPRIS player (hidden when nothing is playing); hover for the track, artist and player | Play/pause; scroll for previous/next |
-| Notifications | qtile's own notification server, so `notify-send` works without a separate daemon | Dismiss; right-click follows the notification's action |
+| Notifications | qtile's own notification server, so `notify-send` works without a separate daemon. Nothing on the bar: each notification drops down as a toast below the bar's right end, and any desktop out of sight with a window of the app that sent it has its number lit up | Click the toast to dismiss; right-click follows the notification's action |
 | Workspaces | One dot per workspace that has windows | |
 | System tray | Application tray icons (takes no space while empty) | |
 | CPU | Load and package temperature (turns red at 90 °C) | |
@@ -159,7 +159,10 @@ Like Windows 11's virtual desktops, each desktop spans every monitor: switching
 desktop switches all of them, and each monitor comes back to whatever it had
 open there. Each bar numbers every desktop that has a window open, by the key
 that reaches it: bright where that desktop has windows on this monitor, dim
-where they are all on another, and the desktop on show sits in a block.
+where they are all on another, and the desktop on show sits in a block. A
+desktop whose number turns the urgent colour has something asking for you - a
+window wanting attention, or a notification from an app with a window there -
+and stays lit until you go to it.
 Docking moves the open windows onto the primary monitor, and undocking brings
 everything back to the laptop.
 

@@ -6,6 +6,7 @@
 # desktop switches every monitor at once, and each monitor comes back to
 # exactly what it was showing on that desktop.
 
+from libqtile import hook
 from libqtile.config import Group
 from libqtile.scratchpad import ScratchPad
 
@@ -14,6 +15,16 @@ DESKTOPS = 9
 # Groups and bars are made for this many monitors whether or not they are
 # plugged in, so one that turns up later has somewhere to go straight away.
 MONITORS = 3
+
+# Windows a notification has asked attention for, by id. Kept apart from a
+# window's own urgency, which qtile recomputes from the window's state each
+# time the app touches it - Brave does so constantly - and so would wipe it.
+attention = set()
+
+
+def wants_attention(window):
+    return window.urgent or window.wid in attention
+
 
 def group_name(desktop, monitor):
     return f"{desktop}:{monitor}"
@@ -56,6 +67,15 @@ def switch(qtile, desktop):
         group = qtile.groups_map.get(group_name(desktop, screen.index))
         if group is not None and screen.group is not group:
             screen.set_group(group, warp=False)
+
+    # Arriving answers whatever on the desktop was asking for attention, not
+    # just the one window that ends up focused.
+    for screen in qtile.screens:
+        for window in screen.group.windows:
+            if wants_attention(window):
+                window.urgent = False
+                attention.discard(window.wid)
+                hook.fire("client_urgent_hint_changed", window)
 
 
 def monitor_of(qtile, window):
