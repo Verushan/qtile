@@ -22,8 +22,10 @@ import json
 import math
 import os
 import re
+import selectors
 import subprocess
 import sys
+import time
 from os import path
 
 qtile_path = path.dirname(path.dirname(path.realpath(__file__)))
@@ -154,17 +156,22 @@ def arrange():
     subprocess.run(command, check=False)
 
 
-def connected_outputs(conn, randr, root):
-    """The names of plugged-in outputs, asked of X without making it probe
-    the hardware again the way `xrandr --query` does."""
-    resources = randr.GetScreenResourcesCurrent(root).reply()
-    names = set()
-    for output in resources.outputs:
-        info = randr.GetOutputInfo(output, resources.config_timestamp).reply()
-        if info.connection == xcffib.randr.Connection.Connected:
-            names.add(bytes(info.name).decode())
+def connected():
+    """The names of plugged-in outputs. `xrandr --query` has X probe the
+    hardware afresh, where X's own idea can lag behind the cable: the HDMI
+    port hangs off the NVIDIA card, which only renders through the Intel one,
+    and X does not always notice that port's monitor going."""
+    return {o["name"] for o in outputs() if o["connected"]}
 
-    return names
+
+def log(message):
+    """A note of what the watcher did, in $XDG_RUNTIME_DIR, to look back on
+    when a monitor does not do what it should."""
+    try:
+        with open(path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "qtile-monitors.log"), "a") as f:
+            f.write(f"{time.strftime('%F %T')} {message}\n")
+    except OSError:
+        pass
 
 
 def watch(wallpapers):
@@ -176,6 +183,14 @@ def watch(wallpapers):
     except OSError:
         return
 
+    # Two ears: the kernel's own hotplug events for the display cards, which
+    # it raises whichever card a port is on, and X's output events.
+    udev = subprocess.Popen(
+        ["udevadm", "monitor", "--udev", "--subsystem-match=drm"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+
     conn = xcffib.connect()
     randr = conn(xcffib.randr.key)
     randr.QueryVersion(1, 5).reply()
@@ -183,22 +198,41 @@ def watch(wallpapers):
     randr.SelectInput(root, xcffib.randr.NotifyMask.OutputChange)
     conn.flush()
 
-    known = connected_outputs(conn, randr, root)
-    while True:
-        # Gives out once the X session ends, and the watcher with it.
-        conn.wait_for_event()
-        while conn.poll_for_event():
-            pass
+    events = selectors.DefaultSelector()
+    events.register(conn.get_file_descriptor(), selectors.EVENT_READ, "x")
+    events.register(udev.stdout.fileno(), selectors.EVENT_READ, "udev")
 
-        # Laying the monitors out sends output events of its own; only a
-        # monitor actually arriving or leaving is worth acting on.
-        now = connected_outputs(conn, randr, root)
-        if now == known:
-            continue
+    known = connected()
+    log(f"watching: {sorted(known)}")
+    try:
+        while True:
+            for event, _ in events.select():
+                if event.data == "udev" and not os.read(event.fd, 65536):
+                    log("udevadm went away")
+                    return
 
-        known = now
-        arrange()
-        subprocess.run([path.join(qtile_path, "scripts", "wallpaper.sh"), wallpapers], check=False)
+            # A cable going in or out sends a burst; let it finish, then
+            # swallow what arrived meanwhile. Polling X raises once the X
+            # session has ended, which ends the watcher with it.
+            time.sleep(0.5)
+            for event, _ in events.select(timeout=0):
+                if event.data == "udev":
+                    os.read(event.fd, 65536)
+            while conn.poll_for_event():
+                pass
+
+            # Laying the monitors out sends output events of its own; only a
+            # monitor actually arriving or leaving is worth acting on.
+            now = connected()
+            if now == known:
+                continue
+
+            log(f"monitors now {sorted(now)}, were {sorted(known)}")
+            known = now
+            arrange()
+            subprocess.run([path.join(qtile_path, "scripts", "wallpaper.sh"), wallpapers], check=False)
+    finally:
+        udev.terminate()
 
 
 if __name__ == "__main__":
